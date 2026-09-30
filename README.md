@@ -1,0 +1,2 @@
+# Automated-karyotyping-
+PRE-TRAINED AI MODEL FOR KARYOTYPING
