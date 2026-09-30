@@ -4,87 +4,98 @@ license_name: dan36karyo
 license_link: LICENSE
 ---
 
-# Model Card for KaryoAI (DN_CYTOGENETICS_KARYOTYPE)
+# Model Card for KaryoAI
 
-A research-only chromosome image-analysis pipeline: a working classical (non-neural) segmentation baseline, plus an in-progress, **untrained** Mask R-CNN instance-segmentation scaffold. Not a diagnostic tool.
-
-> **Repository status note:** the top-level scripts and docs are uploaded, but the `karyo_ai/`, `karyo_ai_dnn/`, `docs/`, `data/`, and `tests/` folders are not yet present in this repo — none of the scripts here will run until those are added (drag the actual folders in via "Add file → Upload files", or use `hf upload <repo> <local-dir> .` to push the whole tree at once).
+Chromosome image-analysis pipeline: a working classical (non-neural) segmentation baseline, plus a deep-learning track with **one real trained checkpoint** (fluorescent images only) and one still-untrained scaffold (Mask R-CNN). Not a diagnostic tool.
 
 ## Extended Description
 
-Karyotyping — arranging an individual's chromosomes into a standardized layout for visual review — is normally done by a trained cytogeneticist working from a metaphase spread image captured under a microscope. It's slow, skill-intensive, and the same manual segmentation-and-arrangement work is repeated for every sample. KaryoAI's goal is to give that reviewer a faster starting point: an automated first-pass segmentation and draft layout they correct, rather than build from scratch — not to replace their judgment.
+Karyotyping — arranging an individual's chromosomes into a standardized layout for visual review — is normally done by a trained cytogeneticist working from a metaphase spread image. KaryoAI's goal is to give that reviewer a faster starting point: an automated first-pass segmentation and draft layout they correct, not a replacement for their judgment.
 
-The project deliberately separates two concerns that are easy to conflate: **finding** chromosome objects in an image, and **identifying** which chromosome each one is. Mixing these into one step makes it hard to tell whether a bad result comes from bad segmentation or bad classification, and makes the whole system harder to validate incrementally. So KaryoAI is built in stages, and ships two tracks at different levels of maturity rather than pretending both are equally ready:
+The project separates two concerns that are easy to conflate: **finding** chromosome objects in an image, and **identifying** which chromosome each one is. Three things exist today, at different levels of maturity:
 
-- **The classical track** (`karyo_ai/`) is genuinely working software today. It thresholds the image, finds connected components as candidate chromosome objects, and applies a simple, explicitly low-confidence heuristic (ordering by size) to lay them out into a draft karyogram. It doesn't claim to know that a given blob is "chromosome 7" — it claims to have found 46 (or however many) chromosome-shaped objects and arranged them in a plausible grid for a human to relabel correctly.
-- **The deep-learning track** (`karyo_ai_dnn/`) is where chromosome *identification* is meant to eventually live, using a Mask R-CNN model trained specifically to segment chromosome instances (as a first stage, separate from identifying which number they are). As of this upload, that track is real, tested code — it builds, trains a step, and runs inference correctly — but it has never seen a real chromosome image and has no trained weights. It exists so that once real annotated data is available, there's a working pipeline to train it into, rather than starting from nothing.
+- **The classical track** (`karyo_ai/`) is working software. It thresholds the image, separates touching/overlapping chromosomes via watershed splitting, pairs objects into homologous slots (1:1, 1:2, 2:1, 2:2 ... through the sex pair), and flags whole spreads as good/review/poor based on how much area remains unresolved. It also filters out non-chromosome objects — screenshot borders, burnt-in text, hand-drawn annotation marks, cell nuclei, background debris — using shape and (on colour-stained images) stain-saturation checks, so they're excluded from pairing and visibly flagged rather than silently corrupting a real chromosome count. It still doesn't claim to know that a given blob is "chromosome 7" — the number is a size-rank slot for a human to relabel, not an identification.
+- **The DeepFISH-trained track** (`karyo_ai_dnn/checkpoints/deepfish_yolov8n_seg.pt`) is a YOLOv8n-seg model fine-tuned on 125 real fluorescent chromosome images (250 overlapping-pair instances). This is a real, verified trained model — not a scaffold. See Training Details and Evaluation below for exactly what it can and can't do; the short version is it works well on fluorescent/DAPI images and fails completely on Giemsa-stained ones.
+- **The Mask R-CNN scaffold** (`karyo_ai_dnn/models/maskrcnn.py`) is still untrained. Code builds, trains a step, and runs inference correctly on synthetic data only — no real chromosome image has been used to train it.
 
-Both tracks support human and mouse chromosome counts (46 and 40 respectively), reflecting the project's origin in comparative cytogenetics research rather than a single-species clinical tool. Every output — from either track — is explicitly framed as a draft: annotated images, JSON results, and Markdown reports are all designed to be corrected by an expert, not consumed directly.
+Both the classical track and the Mask R-CNN scaffold support human and mouse chromosome counts (46 and 40). The DeepFISH-trained model is single-class (chromosome vs. background) and species-agnostic by construction. Every output across all tracks is framed as a draft for expert correction, not a result to act on.
 
 ## Model Details
 
 ### Model Description
 
-KaryoAI is a chromosome-spread image-analysis project aimed at assisting (not replacing) expert cytogenetic review. Two things live in this repository:
+Three components:
 
-1. **A working classical pipeline** — thresholding + connected-component segmentation, producing a segmented/annotated image, a draft karyogram layout, a JSON result, and a Markdown report. Chromosome-to-number assignment uses a low-confidence size-ordering heuristic, explicitly not a validated classifier.
-2. **An untrained deep-learning scaffold** — a PyTorch/torchvision Mask R-CNN (ResNet-50-FPN backbone), currently trained only on synthetic smoke-test data on CPU, not on any real chromosome image. There is no usable checkpoint from this yet.
+1. **Classical pipeline** — thresholding, watershed-based touching-chromosome separation, homologous pairing, artifact/debris/annotation filtering, whole-spread quality gating, draft karyogram and report generation. Rule-based throughout; nothing here is "trained" in the ML sense.
+2. **DeepFISH YOLOv8n-seg checkpoint** — real trained weights (6.7MB), verified against both its own training distribution and out-of-distribution images (see Evaluation). Single class: `chromosome`.
+3. **Untrained Mask R-CNN scaffold** — PyTorch/torchvision, ResNet-50-FPN backbone, structurally verified on synthetic data only.
 
 - **Developed by:** Dan Ngugi
 - **Funded by:** Independent research project; not currently externally funded
 - **Shared by:** Dan Ngugi
-- **Model type:** Not a single trained model — a classical (rule-based) image-processing pipeline, plus an untrained Mask R-CNN (ResNet-50-FPN) instance-segmentation network intended for chromosome-vs-background segmentation
+- **Model type:** A rule-based image-processing pipeline (classical track), plus one trained YOLOv8n-seg instance-segmentation model (fluorescent chromosome detection), plus one untrained Mask R-CNN scaffold
 - **Language(s):** Not applicable (computer vision, not NLP)
 - **License:** Other — `dan36karyo` (custom; **LICENSE file in this repo is currently empty**, terms not yet written)
-- **Finetuned from model:** None yet. The Mask R-CNN builder can optionally start from a COCO/ImageNet-pretrained `torchvision.models.detection.maskrcnn_resnet50_fpn` backbone once real training begins — no fine-tuning has occurred yet.
+- **Finetuned from model:** `yolov8n-seg.pt` (Ultralytics COCO-pretrained) → fine-tuned on the DeepFISH UltraSmall-COCO-Dataset. The Mask R-CNN scaffold remains un-fine-tuned.
 
 ### Model Sources
 
-- **Repository (source, full commit history/branches):** [github.com/Danngugi/Karyotype-ai-pipeline](https://github.com/Danngugi/Karyotype-ai-pipeline)
+- **Repository:** [github.com/Danngugi/Karyotype-ai-pipeline](https://github.com/Danngugi/Karyotype-ai-pipeline)
+- **Training data source:** [github.com/Deep4FISH/DeepFISH](https://github.com/Deep4FISH/DeepFISH) (GPL-3.0)
 - **Paper:** None
-- **Demo:** None currently live (a Hugging Face Space was planned but does not exist on this account yet)
+- **Demo:** None currently live
 
 ## Uses
 
 ### Direct Use
 
-Running the classical pipeline locally or via the (planned) demo to get a draft segmentation, draft karyogram layout, and structured report from a Giemsa-stained metaphase image, for a human expert to review and correct.
+Classical pipeline: draft segmentation, pairing, and report from a Giemsa or fluorescent metaphase image, for expert review. DeepFISH model: chromosome instance detection/segmentation on **fluorescent/DAPI images specifically** — see Bias/Risks/Limitations before using it on anything else.
 
 ### Downstream Use
 
-As the first-pass, machine-assisted step in a larger expert-reviewed cytogenetics workflow — e.g., feeding draft segmentations to a cytogeneticist for correction and annotation, which could in turn become training data for the in-progress Mask R-CNN track.
+First-pass input to an expert-reviewed cytogenetics workflow; corrected outputs could become training data for further model development.
 
 ### Out-of-Scope Use
 
-Clinical diagnosis, patient care decisions, or any use where output is treated as a confirmed karyotype without independent expert review. Not validated for FISH imagery (Giemsa only, currently). Not intended for autonomous/unreviewed use of any kind.
+Clinical diagnosis or any patient-care decision. The DeepFISH model on Giemsa-stained images (verified non-functional, see below). Any use presenting a draft as a confirmed result without expert review.
 
 ## Bias, Risks, and Limitations
 
-- The draft chromosome-numbering heuristic (size-based ordering) will frequently be wrong on real spreads — it was never designed to be a real classifier, just a placeholder layout aid.
-- Classical segmentation degrades on touching/overlapping chromosomes and on debris-heavy or unevenly stained spreads.
-- No performance characterization exists on real data of any kind — only synthetic test images have been used so far (see Evaluation, below).
-- Risk of over-trust: "AI-assisted" framing could be mistaken for validated diagnostic support if the disclaimers here and in the repository aren't carried through to wherever this is deployed.
+- Classical pipeline's chromosome-numbering remains a size-rank heuristic, not identification.
+- **The DeepFISH model detects zero objects on Giemsa-stained images, at any scale or crop position** — verified directly, not assumed. Root cause: it trains exclusively on light-chromosomes-on-dark-background images; Giemsa is the opposite polarity. Use `karyo_ai_dnn.models.deepfish_yolo.is_recommended_for_modality()` to gate this automatically.
+- On full multi-chromosome spreads (as opposed to its own isolated 2-chromosome training crops), the DeepFISH model still works but with more scattered, lower-confidence detections than on its training distribution — a real train/deploy scale gap.
+- No performance characterization exists for any component against expert-verified ground truth — only against the model's own training/validation split (DeepFISH) or synthetic data (Mask R-CNN, classical pipeline's test suite).
+- Risk of over-trust: a real trained model existing now makes it easier to mistake this for validated diagnostic support. It is not.
 
 ### Recommendations
 
-Always have a qualified cytogeneticist review any output before it informs any decision. Validate against your own site's images and staining protocol before relying on this for anything beyond exploratory research. Do not remove the research-only disclaimers when redistributing.
+Always have a qualified cytogeneticist review output before it informs any decision. Do not run the DeepFISH model on Giemsa images. Validate against your own site's images and staining protocol before relying on this beyond exploratory research.
 
 ## How to Get Started with the Model
 
-There's no `from_pretrained`-style checkpoint to load — this repo hosts source code, not trained weights (see Model Description, above).
-
 ```bash
-# Download the repo
-hf download ngugdan/DN-Cytogenetic-karyotyping --local-dir ./karyoai
-# (or: git clone https://huggingface.co/ngugdan/DN-Cytogenetic-karyotyping karyoai)
-cd karyoai
+git clone https://github.com/Danngugi/Karyotype-ai-pipeline.git
+cd Karyotype-ai-pipeline
 
-# Classical baseline (works today):
+# Classical baseline (works today, any modality):
 pip install -r requirements-app.txt
 python3 karyo_ai_cli.py path/to/image.png --out-dir runs/case_001 --species human
 
-# Mask R-CNN scaffold (untrained — structural smoke test only):
+# DeepFISH-trained detector (fluorescent images only):
 pip install -r requirements-dnn.txt
+python3 -c "
+from karyo_ai_dnn.models.deepfish_yolo import run, is_recommended_for_modality
+from karyo_ai import preprocessing
+img = preprocessing.load_image('path/to/image.png')
+modality = preprocessing.detect_modality(img)
+if is_recommended_for_modality(modality):
+    result = run('path/to/image.png')
+    print(f'{len(result.boxes)} chromosomes detected')
+else:
+    print(f'Not recommended for {modality} images')
+"
+
+# Mask R-CNN scaffold (still untrained -- structural smoke test only):
 python3 -m unittest discover tests
 ```
 
@@ -92,23 +103,25 @@ python3 -m unittest discover tests
 
 ### Training Data
 
-None yet for the Mask R-CNN track — no real annotated dataset exists. All current testing uses a synthetic generator (`karyo_ai_dnn/datasets/synthetic.py`) that draws elongated blob shapes; it carries no real chromosome morphology. The classical pipeline is rule-based and was never "trained" in the ML sense.
+**DeepFISH YOLOv8n-seg:** 125 real fluorescent chromosome images, 250 overlapping-pair instances, COCO polygon annotations (Deep4FISH/DeepFISH, GPL-3.0). 80/20 train/val split by image.
+
+**Mask R-CNN scaffold:** None real. Synthetic generator only (`karyo_ai_dnn/datasets/synthetic.py`).
+
+**Classical pipeline:** Not applicable — rule-based, not trained.
 
 ### Training Procedure
 
-Not yet run to completion. `train_maskrcnn.py` implements a standard single-phase fine-tuning loop (SGD, CUDA/MPS/CPU auto-detect) and has been verified to execute one training step correctly on CPU with synthetic data — that is the extent of what has actually happened.
+**DeepFISH YOLOv8n-seg:** Full training run completed on a Colab GPU. `yolov8n-seg.pt` base, 100 epochs, batch 16, image size 224px, standard Ultralytics training loop.
 
-#### Preprocessing
-
-Classical pipeline: contrast/focus QC, grayscale normalization, thresholding. DNN track: standard `torchvision` tensor conversion; no augmentation pipeline implemented yet.
+**Mask R-CNN scaffold:** One structural smoke-test step on CPU with synthetic data — not a real training run.
 
 #### Training Hyperparameters
 
-Not applicable yet — no real training run has been performed to report hyperparameters for.
+DeepFISH model: epochs=100, batch=16, imgsz=224, base model `yolov8n-seg.pt`, default Ultralytics optimizer settings.
 
 #### Speeds, Sizes, Times
 
-Not applicable — the one verified training step was a single-image, single-epoch structural smoke test on a 1-CPU-core machine, taking on the order of seconds. Not representative of any real training run.
+DeepFISH model: 6.7MB checkpoint. Training wall-clock time not recorded. Mask R-CNN's one smoke-test step: seconds, on 1 CPU core — not representative of real training.
 
 ## Evaluation
 
@@ -116,57 +129,52 @@ Not applicable — the one verified training step was a single-image, single-epo
 
 #### Testing Data
 
-Synthetic-only: generated human (46-chromosome) and mouse (40-chromosome) metaphases, plus missing/extra-chromosome variants, used to smoke-test the dataset loader and model — not to measure detection quality.
-
-#### Factors
-
-Not applicable yet — no real-data evaluation has been run to disaggregate by.
+**DeepFISH model:** its own held-out validation split (20% of the 125-image set) for the metrics below. Separately, verified qualitatively against: (a) real project reference images of both modalities, (b) synthetic noise/blank/white adversarial images, (c) scale-matched crops from full spreads.
 
 #### Metrics
 
-Not applicable yet. Planned (per project roadmap, not yet implemented): precision/recall/F1/IoU/Dice/AP50/AP75 for segmentation, plus chromosome-count error and classification accuracy once those stages exist.
+mAP50, mAP50-95, precision, recall (box and mask), reported separately below.
 
 ### Results
 
-None yet — `evaluate_segmentation.py` (the planned evaluation harness) has not been built.
+**DeepFISH YOLOv8n-seg, on its own validation split:**
+
+| Metric | Box | Mask |
+|---|---|---|
+| Precision | 0.980 | 0.905 |
+| Recall | 0.994 | 0.958 |
+| mAP50 | 0.994 | 0.942 |
+| mAP50-95 | 0.798 | 0.690 |
+
+**Qualitative verification beyond the validation split** (this is the part a raw metrics table doesn't show, and why it's included here rather than left implicit):
+- Correctly detects 2 objects/image on held-out training-distribution images, 0.7–0.95 confidence
+- Noise/blank adversarial images: 0 detections on blank, noise tops out ~0.6 confidence vs. 0.9+ on real chromosomes — a healthy, non-degenerate confidence gap
+- **0 detections on Giemsa images, at any scale** — a real, verified limitation, not a gap in testing
+- Reduced confidence and more scattered detections on full multi-chromosome spreads vs. its isolated-pair training crops
+
+**Mask R-CNN scaffold:** no results to report — untrained.
+
+**Classical pipeline:** no formal metrics (rule-based); qualitatively verified end-to-end against real Giemsa and fluorescent project images, including edge cases (zero-detection blank images, severely over-segmented spreads correctly caught by the quality gate).
 
 #### Summary
 
-No trained-model performance can be reported honestly at this stage. This section will be updated once real training and evaluation occur.
-
-## Model Examination
-
-Not applicable yet — no trained model to examine for interpretability.
-
-## Environmental Impact
-
-No dedicated training run has occurred. The only compute used so far was a few seconds of CPU-only structural smoke-testing (1 core, no GPU) to verify the code runs — not a training run in any meaningful sense, so a carbon-emission estimate would not be meaningful here. This section will be completed once real training happens.
-
-- **Hardware Type:** None yet (smoke tests only, 1 CPU core, no GPU)
-- **Hours used:** Not applicable
-- **Cloud Provider:** Not applicable
-- **Compute Region:** Not applicable
-- **Carbon Emitted:** Not applicable
+One component of this project now has real, verified performance data (the DeepFISH model), scoped honestly to what it was actually tested on and where it's known to fail. The rest remains either rule-based (no training claim to make) or untrained (Mask R-CNN). This section should be updated again once the classical pipeline or Mask R-CNN track gets any real-data evaluation.
 
 ## Technical Specifications
 
 ### Model Architecture and Objective
 
-Classical baseline: image thresholding + 4-connected component labelling (via `scipy.ndimage`), heuristic size-based chromosome ordering. DNN track: Mask R-CNN, ResNet-50-FPN backbone, currently configured for Stage A only — binary instance segmentation (background vs. chromosome). Chromosome identity (1–22/X/Y), homolog pairing, and karyotype assembly are separate, not-yet-built later stages by design.
+Classical baseline: thresholding + watershed instance separation, heuristic pairing. DeepFISH model: YOLOv8n-seg (single-stage instance segmentation), class `chromosome` only, Stage A (segmentation, not identity). Mask R-CNN scaffold: ResNet-50-FPN backbone, Stage A, untrained.
 
 ### Compute Infrastructure
 
-#### Hardware
-
-Developed and smoke-tested on a 1-CPU-core, ~4GB RAM, no-GPU environment. Real training will require a GPU (not available in the environment this was built in).
+DeepFISH model trained on a Colab GPU. Everything else (classical pipeline, Mask R-CNN scaffold, all verification/testing) run on a 1-CPU-core, no-GPU environment.
 
 #### Software
 
-Python 3.12, PyTorch 2.14, torchvision 0.29, NumPy, SciPy, Pillow, Streamlit (for the planned demo app).
+Python 3.12, PyTorch, torchvision, Ultralytics (YOLOv8), NumPy, SciPy, scikit-image, Pillow, Streamlit.
 
 ## Citation
-
-**BibTeX:**
 
 ```bibtex
 @software{karyoai,
@@ -177,20 +185,7 @@ Python 3.12, PyTorch 2.14, torchvision 0.29, NumPy, SciPy, Pillow, Streamlit (fo
 }
 ```
 
-**APA:**
-
-Ngugi, D. (2026). *KaryoAI: A research-assistance pipeline for chromosome image analysis* [Computer software]. https://github.com/Danngugi/Karyotype-ai-pipeline
-
-## Glossary
-
-- **Karyogram:** a standardized visual arrangement of an individual's chromosomes, ordered by size/type, used for cytogenetic review.
-- **Metaphase spread:** a microscopy image of condensed chromosomes captured during cell division, the standard input for karyotyping.
-- **Stage A / Stage B (this project's terms):** Stage A = detecting/segmenting chromosome instances only; Stage B = identifying which chromosome number each instance is. Kept as separate models by design so segmentation quality isn't entangled with identity accuracy.
-- **Aneuploidy:** an abnormal chromosome count (e.g., trisomy, monosomy) — a planned future analysis stage, not yet implemented.
-
-## More Information
-
-Full architecture status (what's built vs. planned, section by section) is in `docs/ARCHITECTURE_V2.md` inside the bundled source.
+Training data: Deep4FISH/DeepFISH (GPL-3.0), https://github.com/Deep4FISH/DeepFISH
 
 ## Model Card Authors
 
@@ -198,4 +193,4 @@ Dan Ngugi
 
 ## Model Card Contact
 
-Via Hugging Face: [@ngugdan](https://huggingface.co/ngugdan), or GitHub issues on [Danngugi/Karyotype-ai-pipeline](https://github.com/Danngugi/Karyotype-ai-pipeline)
+Via Hugging Face: [@ngugdan](https://huggingface.co/ngugdan), or GitHub issues on [Danngugi/Karyotype-ai-pipeline](https://github.com/Danngugi/Karyotype-ai-pipeline)ugi/Karyotype-ai-pipeline)
