@@ -1,0 +1,11 @@
+# Phase 1 (Mask R-CNN scaffold) dependencies. Not required to run the
+# classical baseline (karyo_ai_cli.py, streamlit_app.py) -- see
+# requirements-app.txt for that, and requirements.txt for the Hugging Face
+# Space, which should NOT include this file (keeps the Space build fast).
+torch>=2.2
+torchvision>=0.17
+# scikit-image is not currently required: convert_masks_to_dataset.py stores
+# masks by reference (segmentation: {"mask_file": ...}) rather than tracing
+# COCO polygons. Add scikit-image here if/when a true polygon exporter is
+# built for compatibility with external COCO tooling.
+ultralytics>=8.3

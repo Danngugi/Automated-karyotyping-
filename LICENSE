@@ -1,0 +1,40 @@
+DRAFT LICENSE — REVIEW BEFORE THIS COUNTS AS YOUR ACTUAL TERMS
+================================================================
+Draft only — not your final terms. You haven't yet told me what the
+"dan36karyo" license should actually say, and I'm not a lawyer qualified
+to draft binding terms on your behalf — so what follows is a reasonable,
+plain-language placeholder meant to get you started, not a ready-to-use
+license. Read it carefully, revise anything that doesn't reflect what you
+actually want, and remove this notice once the terms are correct.
+
+----------------------------------------------------------------------
+
+Dan36Karyo License
+Copyright (c) 2026 Dan Ngugi
+
+Permission is granted to view, use, and modify this software and its
+documentation for non-commercial research and educational purposes,
+provided that:
+
+1. This copyright notice and license are retained in all copies or
+   substantial portions of the software.
+2. Any published or shared work that uses this software credits it as
+   "KaryoAI, developed by Dan Ngugi" (see CITATION in README.md).
+3. This software is provided for research use only. It is explicitly
+   NOT validated for clinical or diagnostic use, and the author accepts
+   no liability for use in patient care or any other high-stakes
+   decision-making.
+4. Commercial use (incorporation into a paid product or service) requires
+   prior written permission from the author.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
+FROM THE USE OF THIS SOFTWARE.
+
+----------------------------------------------------------------------
+If you'd rather use a standard, pre-vetted license instead of a custom
+one (simpler for others to understand and reuse), MIT, Apache-2.0, or
+CC-BY-NC-4.0 are common choices for research software — tell me which
+and I'll swap this out and update the README's license metadata to match.

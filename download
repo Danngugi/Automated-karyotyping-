@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+runs/
+outputs/
+work/
+*.egg-info/
+.DS_Store
+data/raw/
+data/processed/
+*.pth
+karyo_ai_dnn/checkpoints/*.pt
